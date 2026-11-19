@@ -1,6 +1,7 @@
 import {correctBatch, filterBatches, record, reverseSale, summarize, validateBackup} from "./stock.js";
 
 const key = "duelstock.v1";
+const pricingKey = "duelstock.pricing-defaults.v1";
 const view = document.querySelector("#view");
 const notice = document.querySelector("#notice");
 const conditions = ["Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"];
@@ -128,18 +129,56 @@ function totals(lines, costs) {
         <dt class="net">Profit before tax</dt><dd class="net">${money(result.profit)}</dd></dl>`;
 }
 
+function pricingDefaults() {
+    const saved = JSON.parse(localStorage.getItem(pricingKey) ?? "{}") ?? {};
+    return Object.fromEntries(["rate", "flat", "postage", "packaging"].map(name => {
+        const value = saved[name];
+        const maximum = name === "rate" ? 99 : 999999.99;
+        const fallback = name === "rate" || name === "flat" ? "" : "0.00";
+        return [name, Number.isFinite(value) && value >= 0 && value <= maximum ? value.toFixed(2) : fallback];
+    }));
+}
+
+function percentage(label, name, value) {
+    return field(label, name, `min="0" max="99" step="0.01" value="${value}"`, "number");
+}
+
+function editPricingDefaults() {
+    const defaults = pricingDefaults();
+    view.innerHTML = heading("Pricing defaults", "Set the costs you typically use. You can override them for any order.") +
+        `<form class="panel"><div class="fields">
+        ${percentage("Estimated percentage fee", "rate", defaults.rate)}
+        ${amount("Estimated fixed fee", "flat", defaults.flat)}
+        ${amount("Postage", "postage", defaults.postage)}
+        ${amount("Packaging", "packaging", defaults.packaging)}
+        </div><p><small>Estimated fees apply to price checks. Recorded sales still use your actual marketplace fees.</small></p>
+        <div class="actions"><button>Save defaults</button><a href="#estimate">Back to price check</a></div></form>`;
+    view.querySelector("form").addEventListener("submit", event => {
+        event.preventDefault();
+        try {
+            const entries = [...new FormData(event.currentTarget)].map(([name, value]) => [name, Number(value)]);
+            localStorage.setItem(pricingKey, JSON.stringify(Object.fromEntries(entries)));
+            alert("Pricing defaults saved.");
+        } catch (error) {
+            alert(error.message);
+        }
+    });
+}
+
 function orderPage(state, estimate) {
+    const defaults = pricingDefaults();
     const title = estimate ? "Price check" : "Record an order";
     const batches = state.batches.filter(batch => batch.quantity > 0);
     view.innerHTML = heading(title, estimate ?
         "Estimate profit and break-even for a single card or a combined shipment." :
-        "Build a pick list by bin, then confirm the sale to deduct stock.") +
+        "Build a pick list by bin, then confirm the sale to deduct stock.",
+        estimate ? '<a href="#pricing-defaults">Pricing defaults</a>' : "") +
         (batches.length ? `<form class="stack">
         <section class="panel"><h2>Cards</h2><div id="lines"></div><div class="actions"><button type="button" id="add-line" class="secondary">Add line</button></div></section>
         <section class="panel"><h2>Order costs <span class="muted">(USD)</span></h2><div class="fields">
-        ${estimate ? field("Estimated percentage fee", "rate", 'min="0" max="99" step="0.01"', "number") +
-            amount("Estimated fixed fee", "flat") : field("TCGplayer order number", "number", 'maxlength="80"') + amount("Actual total marketplace fees", "fees")}
-        ${amount("Shipping income", "shipping", "0.00")}${amount("Postage", "postage", "0.00")}${amount("Packaging", "packaging", "0.00")}
+        ${estimate ? percentage("Estimated percentage fee", "rate", defaults.rate) +
+            amount("Estimated fixed fee", "flat", defaults.flat) : field("TCGplayer order number", "number", 'maxlength="80"') + amount("Actual total marketplace fees", "fees")}
+        ${amount("Shipping income", "shipping", "0.00")}${amount("Postage", "postage", defaults.postage)}${amount("Packaging", "packaging", defaults.packaging)}
         </div>${estimate ? '<p><small>The estimate applies one percentage to card sales plus shipping income. Enter actual fees when recording a sale.</small></p>' : ""}
         <div class="actions"><button>${estimate ? "Calculate estimate" : "Review pick list"}</button></div></section></form>
         <div id="review" aria-live="polite"></div>` :
@@ -280,7 +319,7 @@ function orders(state, id) {
 function render() {
     alert("");
     const [page, id] = (location.hash.slice(1) || "inventory").split("/");
-    const section = ["add", "edit", "duplicate"].includes(page) ? "inventory" : page === "new-order" ? "orders" : page;
+    const section = ["add", "edit", "duplicate"].includes(page) ? "inventory" : page === "new-order" ? "orders" : page === "pricing-defaults" ? "estimate" : page;
     for (const control of document.querySelectorAll("[data-page]")) {
         if (control.dataset.page === section) control.setAttribute("aria-current", "page");
         else control.removeAttribute("aria-current");
@@ -294,6 +333,7 @@ function render() {
             else if (batch) intake(null, [], batch);
             else view.innerHTML = heading("Batch unavailable");
         }
+        else if (page === "pricing-defaults") editPricingDefaults();
         else if (page === "estimate" || page === "new-order") orderPage(state, page === "estimate");
         else if (page === "orders") orders(state, id);
         else inventory(state);
