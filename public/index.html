@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Track Yu-Gi-Oh! inventory, pick orders, and calculate profit.">
+<title>Duelstock</title>
+<link rel="stylesheet" href="./app.css">
+<script type="module" src="./app.js"></script>
+</head>
+<body>
+<header class="top"><div class="shell bar">
+<a class="brand" href="#inventory">Duelstock</a>
+<nav aria-label="Main navigation">
+<button data-page="inventory">Inventory</button>
+<button data-page="estimate">Price check</button>
+<button data-page="orders">Orders</button>
+</nav>
+</div></header>
+<main class="shell">
+<div id="notice" role="status"></div>
+<div id="view"></div>
+</main>
+<footer class="shell"><p>USD · Data stays in this browser. <button id="backup" class="link">Download backup</button> · <button id="restore" class="link">Import backup</button><input id="backup-file" type="file" accept=".json,application/json" hidden></p></footer>
+</body>
+</html>
