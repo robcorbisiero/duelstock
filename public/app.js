@@ -283,6 +283,15 @@ function orderPage(state, estimate) {
     });
 }
 
+function filterOrders(orders, query, status) {
+    const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    return orders.filter(order => {
+        if (status !== "all" && status !== (order.reversal ? "reversed" : "active")) return false;
+        const searchable = [order.number, ...order.lines.flatMap(line => [line.card, line.bin])].join(" ").toLowerCase();
+        return terms.every(term => searchable.includes(term));
+    });
+}
+
 function orders(state, id) {
     if (id) {
         const order = state.orders.find(item => item.id === id);
@@ -311,9 +320,27 @@ function orders(state, id) {
         return;
     }
     view.innerHTML = heading("Orders", "Review recorded sales and actual profit.", button("Record an order", "new-order")) +
-        table(["Order number", "Recorded", "Profit"], state.orders.map(order =>
-            `<tr><td><a href="#orders/${order.id}">${escape(order.number)}</a></td><td>${escape(new Date(order.created).toLocaleString())}</td><td>${order.reversal ? "Reversed" : money(summarize(order.lines, order.costs).profit)}</td></tr>`
-        ).join("") || '<tr><td colspan="3">Recorded sales will appear here.</td></tr>');
+        `<form class="search" role="search" aria-label="Filter orders">
+        <input id="order-query" type="search" aria-label="Search orders" placeholder="Order number, card, or bin">
+        <div><label for="sale-status">Sale status</label><select id="sale-status">
+        <option value="all">All sales</option><option value="active">Active</option><option value="reversed">Reversed</option>
+        </select></div></form><p id="order-count" role="status"></p><div id="order-results"></div>`;
+    const query = view.querySelector("#order-query");
+    const status = view.querySelector("#sale-status");
+    const count = view.querySelector("#order-count");
+    const results = view.querySelector("#order-results");
+    function showOrders() {
+        const matching = filterOrders(state.orders, query.value, status.value);
+        count.textContent = `${matching.length} of ${state.orders.length} orders`;
+        const empty = state.orders.length ? "No orders match these filters." : "Recorded sales will appear here.";
+        results.innerHTML = table(["Order number", "Recorded", "Status", "Profit"], matching.map(order =>
+            `<tr><td><a href="#orders/${order.id}">${escape(order.number)}</a></td><td>${escape(new Date(order.created).toLocaleString())}</td><td>${order.reversal ? "Reversed" : "Active"}</td><td>${order.reversal ? "—" : money(summarize(order.lines, order.costs).profit)}</td></tr>`
+        ).join("") || `<tr><td colspan="4">${empty}</td></tr>`);
+    }
+    query.form.addEventListener("submit", event => event.preventDefault());
+    query.addEventListener("input", showOrders);
+    status.addEventListener("change", showOrders);
+    showOrders();
 }
 
 function render() {
